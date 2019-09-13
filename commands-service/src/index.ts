@@ -7,17 +7,19 @@ import * as uuid from "uuid/v4";
 import { createLogger, transports, format } from "winston";
 import { series } from "async";
 
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
 const PORT = process.env.PORT || 3001;
+const QUEUE_URL = process.env.QUEUE_URL || "";
 
-const QUEUE_URL =
-  "https://sqs.us-east-1.amazonaws.com/417990783766/saga-poc-command.fifo";
-
-const COMMANDS_TABLE_NAME = "commands";
+const COMMANDS_TABLE_NAME = process.env.COMMANDS_TABLE_NAME || "commands";
 
 config.update({
-  region: "us-east-1",
-  accessKeyId: "",
-  secretAccessKey: ""
+  region: process.env.AWS_REGION || "us-east-1",
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+  secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
 });
 
 enum Actions {
@@ -101,54 +103,62 @@ app.listen(PORT, () => {
   logger.info("server started at http://localhost:" + PORT);
 });
 
-sqsClient.receiveMessage(
-  {
-    WaitTimeSeconds: 20,
-    MaxNumberOfMessages: 10,
-    VisibilityTimeout: 600, // 10 min wait time for anyone else to process.
-    MessageAttributeNames: ["Action"],
-    QueueUrl: QUEUE_URL
-  },
-  (err, data) => {
-    if (err) throw err;
-    logger.debug("Received data " + data);
-    if (data.Messages)
-      data.Messages.forEach(message => {
-        const action = message.MessageAttributes["Action"].StringValue;
-        logger.debug("Received Action : " + action);
-        switch (action) {
-          case Actions.CREATE:
-            const command = JSON.parse(message.Body);
-            series(
-              [
-                insertCommand.bind(null, command),
-                sendMessage.bind(null, Actions.CREATED, command),
-                deleteMessage.bind(null, message.ReceiptHandle)
-              ],
-              err => {
-                if (err) throw err;
-              }
-            );
-            break;
-          case Actions.DELETE:
-            const commandId = JSON.parse(message.Body).id;
-            series(
-              [
-                deleteCommand.bind(null, commandId),
-                sendMessage.bind(null, Actions.DELETED, command),
-                deleteMessage.bind(null, message.ReceiptHandle)
-              ],
-              err => {
-                if (err) throw err;
-              }
-            );
-            break;
-          default:
-            return;
+setInterval(
+  () =>
+    sqsClient.receiveMessage(
+      {
+        WaitTimeSeconds: 20,
+        MaxNumberOfMessages: 10,
+        VisibilityTimeout: 1 * 60, // 1 min wait time for anyone else to process.
+        MessageAttributeNames: ["Action"],
+        QueueUrl: QUEUE_URL
+      },
+      (err, data) => {
+        if (err) throw err;
+        if (data.Messages) {
+          logger.debug("Received messages from queue");
+          data.Messages.forEach(message => {
+            const action = message.MessageAttributes["Action"].StringValue;
+            logger.debug("Received Action : " + action);
+            switch (action) {
+              case Actions.CREATE:
+                const command = JSON.parse(message.Body);
+                series(
+                  [
+                    insertCommand.bind(null, command),
+                    sendMessage.bind(null, Actions.CREATED, command),
+                    deleteMessage.bind(null, message.ReceiptHandle)
+                  ],
+                  err => {
+                    if (err) throw err;
+                  }
+                );
+                break;
+              case Actions.DELETE:
+                const commandId = JSON.parse(message.Body).id;
+                series(
+                  [
+                    deleteCommand.bind(null, commandId),
+                    sendMessage.bind(null, Actions.DELETED, command),
+                    deleteMessage.bind(null, message.ReceiptHandle)
+                  ],
+                  err => {
+                    if (err) throw err;
+                  }
+                );
+                break;
+              default:
+                return;
+            }
+          });
+        } else {
+          logger.debug("Empty response received from queue");
         }
-      });
-  }
+      }
+    ),
+  1000 * 30
 );
+
 function insertCommand(command, callback: (err: any, data: any) => void) {
   dynamoDbClient.put(
     {
