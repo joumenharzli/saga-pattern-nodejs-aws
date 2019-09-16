@@ -28,6 +28,7 @@
     "webpack-shell-plugin": "^0.5.0"
   },
   "scripts": {
+    "build": "tsc",
     "serve": "webpack",
     "run:watch": "NODE_ENV=development nodemon build/bundle.js"
   },

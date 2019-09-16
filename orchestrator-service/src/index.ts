@@ -86,7 +86,6 @@ setInterval(
             switch (action) {
               case CommandActions.CREATED:
                 const command = JSON.parse(message.Body);
-                const products = command.items;
 
                 series(
                   [

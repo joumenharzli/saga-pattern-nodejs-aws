@@ -105,7 +105,8 @@ setInterval(
             logger.debug("Received Action : " + action);
             switch (action) {
               case ProductActions.DEC_COUNT:
-                const products = JSON.parse(message.Body);
+                const command = JSON.parse(message.Body);
+                const products = command.items;
 
                 series(
                   [
@@ -113,7 +114,7 @@ setInterval(
                     sendMessage.bind(
                       null,
                       ProductActions.DEC_COUNT_SUCCEEDED,
-                      products
+                      command
                     ),
                     deleteMessage.bind(null, message.ReceiptHandle)
                   ],
@@ -165,13 +166,14 @@ function decreseProductsCount(
               itemCallback();
             });
           },
-          err => {
-            if (err) callback(err, null);
-            callback(null, processedProducts);
+          rollbackErr => {
+            if (rollbackErr) callback(rollbackErr, null);
+            callback(err, null);
           }
         );
         callback(err, null);
       }
+      callback(null, processedProducts);
     }
   );
 }
