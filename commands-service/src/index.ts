@@ -9,6 +9,8 @@ import { series } from "async";
 
 import * as dotenv from "dotenv";
 
+import { CommandActions } from "../../shared/actions";
+
 dotenv.config();
 
 const PORT = process.env.PORT || 3001;
@@ -21,13 +23,6 @@ config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
   secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
 });
-
-enum Actions {
-  CREATE = "CREATE_COMMAND",
-  DELETE = "DELETE_COMMAND",
-  CREATED = "COMMAND_CREATED",
-  DELETED = "COMMAND_DELETED"
-}
 
 const dynamoDbClient = new DynamoDB.DocumentClient();
 const sqsClient = new SQS();
@@ -48,13 +43,14 @@ app.post("/commands", (req: Request, res: Response, next: NextFunction) => {
   const command = {
     id: id,
     date: new Date().toISOString(),
-    items: req.body.items
+    items: req.body.items,
+    status: "IN_PROCESS"
   };
 
   series(
     [
       insertCommand.bind(null, command),
-      sendMessage.bind(null, Actions.CREATE, command)
+      sendMessage.bind(null, CommandActions.CREATE, command)
     ],
     err => {
       if (err) return next(err);
@@ -77,7 +73,7 @@ app.delete(
     series(
       [
         deleteCommand.bind(null, { id }),
-        sendMessage.bind(null, Actions.DELETED, { id })
+        sendMessage.bind(null, CommandActions.DELETED, { id })
       ],
       err => {
         if (err) return next(err);
@@ -121,12 +117,12 @@ setInterval(
             const action = message.MessageAttributes["Action"].StringValue;
             logger.debug("Received Action : " + action);
             switch (action) {
-              case Actions.CREATE:
+              case CommandActions.CREATE:
                 const command = JSON.parse(message.Body);
                 series(
                   [
                     insertCommand.bind(null, command),
-                    sendMessage.bind(null, Actions.CREATED, command),
+                    sendMessage.bind(null, CommandActions.CREATED, command),
                     deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {
@@ -134,12 +130,12 @@ setInterval(
                   }
                 );
                 break;
-              case Actions.DELETE:
+              case CommandActions.DELETE:
                 const commandId = JSON.parse(message.Body).id;
                 series(
                   [
                     deleteCommand.bind(null, commandId),
-                    sendMessage.bind(null, Actions.DELETED, command),
+                    sendMessage.bind(null, CommandActions.DELETED, command),
                     deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {

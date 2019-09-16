@@ -5,9 +5,11 @@ import * as bodyParser from "body-parser";
 import { DynamoDB, SQS, config } from "aws-sdk";
 import * as uuid from "uuid/v4";
 import { createLogger, transports, format } from "winston";
-import { series } from "async";
+import { series, forEachOf } from "async";
 
 import * as dotenv from "dotenv";
+
+import { ProductActions } from "../../shared/actions";
 
 dotenv.config();
 
@@ -21,15 +23,6 @@ config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
   secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
 });
-
-enum Actions {
-  INC_COUNT = "PRODUCT_INC_COUNT",
-  DEC_COUNT = "PRODUCT_DEC_COUNT",
-  INC_COUNT_SUCCEEDED = "PRODUCT_INC_COUNT_SUCCEEDED",
-  DEC_COUNT_SUCCEEDED = "PRODUCT_DEC_COUNT_SUCCEEDED",
-  ROLLBACK_DEC_COUNT = "PRODUCT_ROLLBACK_DEC_COUNT",
-  ROLLBACK_INC_COUNT = "PRODUCT_ROLLBACK_INC_COUNT"
-}
 
 const dynamoDbClient = new DynamoDB.DocumentClient();
 const sqsClient = new SQS();
@@ -111,15 +104,16 @@ setInterval(
             const action = message.MessageAttributes["Action"].StringValue;
             logger.debug("Received Action : " + action);
             switch (action) {
-              case Actions.INC_COUNT:
-                const product = JSON.parse(message.Body);
+              case ProductActions.DEC_COUNT:
+                const products = JSON.parse(message.Body);
+
                 series(
                   [
-                    increaseProductCount.bind(null, product),
+                    decreseProductsCount.bind(null, products),
                     sendMessage.bind(
                       null,
-                      Actions.INC_COUNT_SUCCEEDED,
-                      product
+                      ProductActions.DEC_COUNT_SUCCEEDED,
+                      products
                     ),
                     deleteMessage.bind(null, message.ReceiptHandle)
                   ],
@@ -127,32 +121,8 @@ setInterval(
                     if (err) {
                       sendMessage.bind(
                         null,
-                        Actions.ROLLBACK_INC_COUNT,
-                        product
-                      );
-                      throw err;
-                    }
-                  }
-                );
-                break;
-              case Actions.DEC_COUNT:
-                const productId = JSON.parse(message.Body).id;
-                series(
-                  [
-                    decreaseProductCount.bind(null, productId),
-                    sendMessage.bind(
-                      null,
-                      Actions.DEC_COUNT_SUCCEEDED,
-                      product
-                    ),
-                    deleteMessage.bind(null, message.ReceiptHandle)
-                  ],
-                  err => {
-                    if (err) {
-                      sendMessage.bind(
-                        null,
-                        Actions.ROLLBACK_DEC_COUNT,
-                        product
+                        ProductActions.ROLLBACK_DEC_COUNT,
+                        products
                       );
                       throw err;
                     }
@@ -170,6 +140,41 @@ setInterval(
     ),
   1000 * 30
 );
+
+function decreseProductsCount(
+  products: any,
+  callback: (err: any, data: any) => void
+) {
+  const processedProducts = [];
+  forEachOf(
+    products,
+    (item, _, itemCallback) => {
+      decreaseProductCount(<string>item, err => {
+        if (err) itemCallback(err);
+        processedProducts.push(item);
+        itemCallback();
+      });
+    },
+    err => {
+      if (err) {
+        forEachOf(
+          products,
+          (item, _, itemCallback) => {
+            increaseProductCount(<string>item, err => {
+              if (err) throw err;
+              itemCallback();
+            });
+          },
+          err => {
+            if (err) callback(err, null);
+            callback(null, processedProducts);
+          }
+        );
+        callback(err, null);
+      }
+    }
+  );
+}
 
 function insertProduct(product, callback: (err: any, data: any) => void) {
   dynamoDbClient.put(
@@ -207,35 +212,36 @@ function getProducts(callback: (err: any, data: any) => void) {
   );
 }
 
-function increaseProductCount(
-  productId: string,
-  callback: (err: any, data: any) => void
-) {
+function increaseProductCount(item, callback: (err: any, data: any) => void) {
   dynamoDbClient.update(
     {
       TableName: PRODUCTS_TABLE_NAME,
-      Key: { id: productId },
-      UpdateExpression: "set count = count + :val",
+      Key: { id: item.id },
+      UpdateExpression: "set #c = #c + :val",
+      ExpressionAttributeNames: {
+        "#c": "count"
+      },
       ExpressionAttributeValues: {
-        ":val": 1
+        ":val": item.count
       }
     },
     callback
   );
 }
 
-function decreaseProductCount(
-  productId: string,
-  callback: (err: any, data: any) => void
-) {
+function decreaseProductCount(item, callback: (err: any, data: any) => void) {
   dynamoDbClient.update(
     {
       TableName: PRODUCTS_TABLE_NAME,
-      Key: { id: productId },
-      UpdateExpression: "set count = count - :val",
-      ConditionExpression: "count > 0",
+      Key: { id: item.id },
+      UpdateExpression: "set #c = #c - :val",
+      ConditionExpression: "#c > :param",
+      ExpressionAttributeNames: {
+        "#c": "count"
+      },
       ExpressionAttributeValues: {
-        ":val": 1
+        ":val": item.count,
+        ":param": 0
       }
     },
     callback
