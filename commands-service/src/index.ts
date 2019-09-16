@@ -15,6 +15,7 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3001;
 const QUEUE_URL = process.env.QUEUE_URL || "";
+const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
 const COMMANDS_TABLE_NAME = process.env.COMMANDS_TABLE_NAME || "commands";
 
@@ -115,14 +116,26 @@ setInterval(
           logger.debug("Received messages from queue");
           data.Messages.forEach(message => {
             const action = message.MessageAttributes["Action"].StringValue;
-            logger.debug("Received Action : " + action);
+            logger.debug("Received action : " + action);
+            const command = JSON.parse(message.Body);
             switch (action) {
               case CommandActions.CREATE:
-                const command = JSON.parse(message.Body);
                 series(
                   [
                     insertCommand.bind(null, command),
                     sendMessage.bind(null, CommandActions.CREATED, command),
+                    deleteMessage.bind(null, message.ReceiptHandle)
+                  ],
+                  err => {
+                    if (err) throw err;
+                  }
+                );
+                break;
+              case CommandActions.VALIDATE:
+                series(
+                  [
+                    validateCommand.bind(null, command),
+                    sendMessage.bind(null, CommandActions.VALIDATED, command),
                     deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {
@@ -165,6 +178,25 @@ function insertCommand(command, callback: (err: any, data: any) => void) {
   );
 }
 
+function validateCommand(command, callback: (err: any, data: any) => void) {
+  dynamoDbClient.update(
+    {
+      TableName: COMMANDS_TABLE_NAME,
+      Key: {
+        id: command.id
+      },
+      UpdateExpression: "set #s = :val",
+      ExpressionAttributeNames: {
+        "#s": "status"
+      },
+      ExpressionAttributeValues: {
+        ":val": "VALIDATED"
+      }
+    },
+    callback
+  );
+}
+
 function deleteCommand(
   commandId: string,
   callback: (err: any, data: any) => void
@@ -196,6 +228,7 @@ function sendMessage(
   command,
   callback: (err: any, data: any) => void
 ) {
+  logger.debug("Sent message to orchestrator queue : " + action);
   const msg = {
     MessageAttributes: {
       Action: {
@@ -206,7 +239,7 @@ function sendMessage(
     MessageBody: JSON.stringify(command),
     MessageDeduplicationId: uuid(),
     MessageGroupId: "Commands-" + command.id,
-    QueueUrl: QUEUE_URL
+    QueueUrl: ORCHESTRATOR_QUEUE_URL
   };
   sqsClient.sendMessage(msg, callback);
 }

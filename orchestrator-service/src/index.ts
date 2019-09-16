@@ -14,6 +14,7 @@ import { CommandActions, ProductActions } from "../../shared/actions";
 dotenv.config();
 
 const PORT = process.env.PORT || 3002;
+const QUEUE_URL = process.env.QUEUE_URL || "";
 const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const PRODUCTS_QUEUE_URL = process.env.PRODUCTS_QUEUE_URL || "";
 
@@ -74,7 +75,7 @@ setInterval(
         MaxNumberOfMessages: 10,
         VisibilityTimeout: 1 * 60, // 1 min wait time for anyone else to process.
         MessageAttributeNames: ["Action"],
-        QueueUrl: COMMANDS_QUEUE_URL
+        QueueUrl: QUEUE_URL
       },
       (err, data) => {
         if (err) throw err;
@@ -82,11 +83,12 @@ setInterval(
           logger.debug("Received messages from queue");
           data.Messages.forEach(message => {
             const action = message.MessageAttributes["Action"].StringValue;
-            logger.debug("Received Action : " + action);
+            logger.debug("Received action : " + action);
+
+            const command = JSON.parse(message.Body);
+
             switch (action) {
               case CommandActions.CREATED:
-                const command = JSON.parse(message.Body);
-
                 series(
                   [
                     sendMessageToProductQueue.bind(
@@ -94,49 +96,14 @@ setInterval(
                       ProductActions.DEC_COUNT,
                       command
                     ),
-                    deleteMessageFromCommandQueue.bind(
-                      null,
-                      message.ReceiptHandle
-                    )
+                    deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {
                     if (err) throw err;
                   }
                 );
                 break;
-              default:
-                return;
-            }
-          });
-        } else {
-          logger.debug("Empty response received from queue");
-        }
-      }
-    ),
-  1000 * 30
-);
 
-setInterval(
-  () =>
-    sqsClient.receiveMessage(
-      {
-        WaitTimeSeconds: 20,
-        MaxNumberOfMessages: 10,
-        VisibilityTimeout: 1 * 60, // 1 min wait time for anyone else to process.
-        MessageAttributeNames: ["Action"],
-        QueueUrl: PRODUCTS_QUEUE_URL
-      },
-      (err, data) => {
-        if (err) throw err;
-        if (data.Messages) {
-          logger.debug("Received messages from queue");
-          data.Messages.forEach(message => {
-            const action = message.MessageAttributes["Action"].StringValue;
-            logger.debug("Received Action : " + action);
-
-            const command = JSON.parse(message.Body);
-
-            switch (action) {
               case ProductActions.DEC_COUNT_SUCCEEDED:
                 series(
                   [
@@ -145,15 +112,18 @@ setInterval(
                       CommandActions.VALIDATE,
                       command
                     ),
-                    deleteMessageFromProductQueue.bind(
-                      null,
-                      message.ReceiptHandle
-                    )
+                    deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {
                     if (err) throw err;
                   }
                 );
+                break;
+
+              case CommandActions.VALIDATED:
+                deleteMessage(message.ReceiptHandle, err => {
+                  if (err) throw err;
+                });
                 break;
 
               case ProductActions.ROLLBACK_DEC_COUNT:
@@ -164,10 +134,7 @@ setInterval(
                       CommandActions.CANCEL,
                       command
                     ),
-                    deleteMessageFromProductQueue.bind(
-                      null,
-                      message.ReceiptHandle
-                    )
+                    deleteMessage.bind(null, message.ReceiptHandle)
                   ],
                   err => {
                     if (err) throw err;
@@ -191,6 +158,8 @@ function sendMessageToCommandQueue(
   command,
   callback: (err: any, data: any) => void
 ) {
+  logger.debug("Message sent to command queue : " + action);
+
   const msg = {
     MessageAttributes: {
       Action: {
@@ -206,13 +175,14 @@ function sendMessageToCommandQueue(
   sqsClient.sendMessage(msg, callback);
 }
 
-function deleteMessageFromCommandQueue(
+function deleteMessage(
   receiptHandle: string,
   callback: (err: any, data: any) => void
 ) {
+  logger.debug("Processed message deleted");
   sqsClient.deleteMessage(
     {
-      QueueUrl: COMMANDS_QUEUE_URL,
+      QueueUrl: QUEUE_URL,
       ReceiptHandle: receiptHandle
     },
     callback
@@ -224,6 +194,8 @@ function sendMessageToProductQueue(
   command,
   callback: (err: any, data: any) => void
 ) {
+  logger.debug("Message sent to product queue : " + action);
+
   const msg = {
     MessageAttributes: {
       Action: {
@@ -237,17 +209,4 @@ function sendMessageToProductQueue(
     QueueUrl: PRODUCTS_QUEUE_URL
   };
   sqsClient.sendMessage(msg, callback);
-}
-
-function deleteMessageFromProductQueue(
-  receiptHandle: string,
-  callback: (err: any, data: any) => void
-) {
-  sqsClient.deleteMessage(
-    {
-      QueueUrl: PRODUCTS_QUEUE_URL,
-      ReceiptHandle: receiptHandle
-    },
-    callback
-  );
 }

@@ -13,8 +13,9 @@ import { ProductActions } from "../../shared/actions";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 const QUEUE_URL = process.env.QUEUE_URL || "";
+const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
 const PRODUCTS_TABLE_NAME = process.env.PRODUCTS_TABLE_NAME || "products";
 
@@ -102,7 +103,7 @@ setInterval(
           logger.debug("Received messages from queue");
           data.Messages.forEach(message => {
             const action = message.MessageAttributes["Action"].StringValue;
-            logger.debug("Received Action : " + action);
+            logger.debug("Received action : " + action);
             switch (action) {
               case ProductActions.DEC_COUNT:
                 const command = JSON.parse(message.Body);
@@ -265,7 +266,7 @@ function sendMessage(
     MessageBody: JSON.stringify(product),
     MessageDeduplicationId: uuid(),
     MessageGroupId: "Products-" + product.id,
-    QueueUrl: QUEUE_URL
+    QueueUrl: ORCHESTRATOR_QUEUE_URL
   };
   sqsClient.sendMessage(msg, callback);
 }
@@ -274,6 +275,8 @@ function deleteMessage(
   receiptHandle: string,
   callback: (err: any, data: any) => void
 ) {
+  logger.debug("Processed message deleted");
+
   sqsClient.deleteMessage(
     {
       QueueUrl: QUEUE_URL,
