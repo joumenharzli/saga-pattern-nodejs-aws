@@ -150,7 +150,7 @@ setInterval(
         }
       }
     ),
-  1000 * 30
+  1000 * 10 // poll every 10 seconds
 );
 
 function decreseProductsCount(
