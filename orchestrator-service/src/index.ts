@@ -14,15 +14,17 @@ import { CommandActions, ProductActions } from "../../shared/actions";
 dotenv.config();
 
 const PORT = process.env.PORT || 3002;
-const QUEUE_URL = process.env.QUEUE_URL || "";
+const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const PRODUCTS_QUEUE_URL = process.env.PRODUCTS_QUEUE_URL || "";
 
-config.update({
-  region: process.env.AWS_REGION || "us-east-1",
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-  secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
-});
+if (process.env.AWS_ACCESS_KEY_ID) {
+  config.update({
+    region: process.env.AWS_REGION || "us-east-1",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
+  });
+}
 
 const sqsClient = new SQS();
 
@@ -75,7 +77,7 @@ setInterval(
         MaxNumberOfMessages: 10,
         VisibilityTimeout: 1 * 60, // 1 min wait time for anyone else to process.
         MessageAttributeNames: ["Action"],
-        QueueUrl: QUEUE_URL
+        QueueUrl: ORCHESTRATOR_QUEUE_URL
       },
       (err, data) => {
         if (err) throw err;
@@ -188,7 +190,7 @@ function deleteMessage(
   logger.debug("Processed message deleted");
   sqsClient.deleteMessage(
     {
-      QueueUrl: QUEUE_URL,
+      QueueUrl: ORCHESTRATOR_QUEUE_URL,
       ReceiptHandle: receiptHandle
     },
     callback

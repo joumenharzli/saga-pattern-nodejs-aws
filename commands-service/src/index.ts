@@ -14,16 +14,18 @@ import { CommandActions } from "../../shared/actions";
 dotenv.config();
 
 const PORT = process.env.PORT || 3001;
-const QUEUE_URL = process.env.QUEUE_URL || "";
+const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
 const COMMANDS_TABLE_NAME = process.env.COMMANDS_TABLE_NAME || "commands";
 
-config.update({
-  region: process.env.AWS_REGION || "us-east-1",
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-  secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
-});
+if (process.env.AWS_ACCESS_KEY_ID) {
+  config.update({
+    region: process.env.AWS_REGION || "us-east-1",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
+  });
+}
 
 const dynamoDbClient = new DynamoDB.DocumentClient();
 const sqsClient = new SQS();
@@ -108,7 +110,7 @@ setInterval(
         MaxNumberOfMessages: 10,
         VisibilityTimeout: 1 * 60, // 1 min wait time for anyone else to process.
         MessageAttributeNames: ["Action"],
-        QueueUrl: QUEUE_URL
+        QueueUrl: COMMANDS_QUEUE_URL
       },
       (err, data) => {
         if (err) throw err;
@@ -281,7 +283,7 @@ function deleteMessage(
 ) {
   sqsClient.deleteMessage(
     {
-      QueueUrl: QUEUE_URL,
+      QueueUrl: COMMANDS_QUEUE_URL,
       ReceiptHandle: receiptHandle
     },
     callback
