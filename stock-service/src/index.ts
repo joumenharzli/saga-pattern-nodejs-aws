@@ -19,9 +19,12 @@ const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
 const PRODUCTS_TABLE_NAME = process.env.PRODUCTS_TABLE_NAME || "products";
 
+config.update({
+  region: process.env.AWS_REGION || "us-east-1"
+});
+
 if (process.env.AWS_ACCESS_KEY_ID) {
   config.update({
-    region: process.env.AWS_REGION || "us-east-1",
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.AWS_SECREt_ACCESS_KEY || ""
   });
