@@ -143,6 +143,18 @@ setInterval(
                   }
                 );
                 break;
+              case CommandActions.CANCEL:
+                series(
+                  [
+                    cancelCommand.bind(null, command),
+                    sendMessage.bind(null, CommandActions.CANCELED, command),
+                    deleteMessage.bind(null, message.ReceiptHandle)
+                  ],
+                  err => {
+                    if (err) throw err;
+                  }
+                );
+                break;
               case CommandActions.DELETE:
                 const commandId = JSON.parse(message.Body).id;
                 series(
@@ -191,6 +203,25 @@ function validateCommand(command, callback: (err: any, data: any) => void) {
       },
       ExpressionAttributeValues: {
         ":val": "VALIDATED"
+      }
+    },
+    callback
+  );
+}
+
+function cancelCommand(command, callback: (err: any, data: any) => void) {
+  dynamoDbClient.update(
+    {
+      TableName: COMMANDS_TABLE_NAME,
+      Key: {
+        id: command.id
+      },
+      UpdateExpression: "set #s = :val",
+      ExpressionAttributeNames: {
+        "#s": "status"
+      },
+      ExpressionAttributeValues: {
+        ":val": "CANCELED"
       }
     },
     callback

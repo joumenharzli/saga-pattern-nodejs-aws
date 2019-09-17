@@ -121,11 +121,21 @@ setInterval(
                   ],
                   err => {
                     if (err) {
-                      sendMessage.bind(
-                        null,
-                        ProductActions.ROLLBACK_DEC_COUNT,
-                        products
-                      );
+                      if (err["code"] === "ConditionalCheckFailedException") {
+                        deleteMessage(message.ReceiptHandle, () => {
+                          sendMessage(
+                            ProductActions.ROLLBACK_DEC_COUNT,
+                            command,
+                            () => {}
+                          );
+                        });
+                      } else {
+                        sendMessage(
+                          ProductActions.ROLLBACK_DEC_COUNT,
+                          command,
+                          () => {}
+                        );
+                      }
                       throw err;
                     }
                   }
@@ -153,28 +163,32 @@ function decreseProductsCount(
     (item, _, itemCallback) => {
       decreaseProductCount(<string>item, err => {
         if (err) itemCallback(err);
-        processedProducts.push(item);
-        itemCallback();
+        else {
+          processedProducts.push(item);
+          itemCallback();
+        }
       });
     },
     err => {
       if (err) {
-        forEachOf(
-          products,
-          (item, _, itemCallback) => {
-            increaseProductCount(<string>item, err => {
-              if (err) throw err;
-              itemCallback();
-            });
-          },
-          rollbackErr => {
-            if (rollbackErr) callback(rollbackErr, null);
-            callback(err, null);
-          }
-        );
-        callback(err, null);
-      }
-      callback(null, processedProducts);
+        if (err["code"] === "ConditionalCheckFailedException") {
+          forEachOf(
+            processedProducts,
+            (item, _, itemCallback) => {
+              increaseProductCount(<string>item, err => {
+                if (err) itemCallback(err);
+                else itemCallback();
+              });
+            },
+            rollbackErr => {
+              if (rollbackErr) callback(rollbackErr, null);
+              else callback(err, null);
+            }
+          );
+        } else {
+          callback(err, null);
+        }
+      } else callback(null, processedProducts);
     }
   );
 }
@@ -232,23 +246,26 @@ function increaseProductCount(item, callback: (err: any, data: any) => void) {
   );
 }
 
-function decreaseProductCount(item, callback: (err: any, data: any) => void) {
-  dynamoDbClient.update(
-    {
+async function decreaseProductCount(
+  item,
+  callback: (err: any, data: any) => void
+) {
+  await dynamoDbClient
+    .update({
       TableName: PRODUCTS_TABLE_NAME,
       Key: { id: item.id },
       UpdateExpression: "set #c = #c - :val",
-      ConditionExpression: "#c > :param",
+      ConditionExpression: "#c >= :val",
       ExpressionAttributeNames: {
         "#c": "count"
       },
       ExpressionAttributeValues: {
-        ":val": item.count,
-        ":param": 0
+        ":val": item.count
       }
-    },
-    callback
-  );
+    })
+    .promise()
+    .then(data => callback(null, data))
+    .catch(ex => callback(ex, null));
 }
 
 function sendMessage(

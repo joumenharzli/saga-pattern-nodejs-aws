@@ -126,6 +126,12 @@ setInterval(
                 });
                 break;
 
+              case CommandActions.CANCELED:
+                deleteMessage(message.ReceiptHandle, err => {
+                  if (err) throw err;
+                });
+                break;
+
               case ProductActions.ROLLBACK_DEC_COUNT:
                 series(
                   [
