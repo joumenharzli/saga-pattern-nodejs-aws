@@ -13,7 +13,7 @@ import { CommandActions, ProductActions } from "../../shared/actions";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const PRODUCTS_QUEUE_URL = process.env.PRODUCTS_QUEUE_URL || "";
