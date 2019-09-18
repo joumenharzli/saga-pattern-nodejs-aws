@@ -9,6 +9,7 @@ function ProductsContainer() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadProducts() {
     const req = await axios.get(env.PRODUCTS_URL + "/products");
@@ -31,6 +32,13 @@ function ProductsContainer() {
     loadProducts();
   }
 
+  async function deleteProduct(id) {
+    setDeleting(true);
+    await axios.delete(env.PRODUCTS_URL + "/products/" + id);
+    setDeleting(false);
+    loadProducts();
+  }
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -39,7 +47,12 @@ function ProductsContainer() {
     <div>
       <h2>Products</h2>
       <ProductForm saving={saving} createProduct={createProduct} />
-      <ProductsList products={products} loading={loading} />
+      <ProductsList
+        products={products}
+        loading={loading}
+        deleteProduct={deleteProduct}
+        deleting={deleting}
+      />
     </div>
   );
 }
