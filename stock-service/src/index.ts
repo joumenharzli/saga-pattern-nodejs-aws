@@ -10,10 +10,11 @@ import { series, forEachOf } from "async";
 import * as dotenv from "dotenv";
 
 import { ProductActions } from "../../shared/actions";
+import * as cors from "cors";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3001;
 const PRODUCTS_QUEUE_URL = process.env.PRODUCTS_QUEUE_URL || "";
 const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
@@ -40,6 +41,8 @@ const logger = createLogger({
 });
 
 const app = express();
+
+app.use(cors());
 
 app.use(bodyParser.json());
 
@@ -79,7 +82,7 @@ app.delete(
 app.get("/products", (req: Request, res: Response, next: NextFunction) => {
   getProducts((err, data) => {
     if (err) return next(err);
-    res.send(data);
+    res.send(data.Items);
   });
 });
 
