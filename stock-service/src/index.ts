@@ -219,9 +219,7 @@ function deleteProduct(
     {
       TableName: PRODUCTS_TABLE_NAME,
       Key: {
-        id: {
-          S: productId
-        }
+        id: productId
       }
     },
     callback
