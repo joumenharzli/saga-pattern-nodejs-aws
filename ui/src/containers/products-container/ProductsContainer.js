@@ -22,8 +22,8 @@ function ProductsContainer() {
 
     const data = {
       name: event.target.name.value,
-      price: event.target.price.value,
-      count: event.target.count.value
+      price: parseFloat(event.target.price.value),
+      count: parseInt(event.target.count.value, 10)
     };
 
     setSaving(true);
