@@ -8,12 +8,13 @@ import { createLogger, transports, format } from "winston";
 import { series } from "async";
 
 import * as dotenv from "dotenv";
+import * as cors from "cors";
 
 import { CommandActions } from "../../shared/actions";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
 
@@ -40,6 +41,8 @@ const logger = createLogger({
 });
 
 const app = express();
+
+app.use(cors());
 
 app.use(bodyParser.json());
 
@@ -92,7 +95,7 @@ app.delete(
 app.get("/commands", (req: Request, res: Response, next: NextFunction) => {
   getCommands((err, data) => {
     if (err) return next(err);
-    res.send(data);
+    res.send(data.Items);
   });
 });
 

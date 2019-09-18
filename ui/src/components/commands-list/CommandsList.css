@@ -1,0 +1,9 @@
+ul {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+}
+
+ul > li {
+  margin: 5px;
+}
