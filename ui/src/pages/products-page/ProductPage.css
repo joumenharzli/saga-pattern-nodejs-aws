@@ -1,0 +1,8 @@
+.main {
+  flex: 1;
+  display: flex;
+}
+
+section {
+  flex-grow: 1;
+}
