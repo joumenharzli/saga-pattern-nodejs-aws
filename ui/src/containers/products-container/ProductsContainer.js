@@ -45,7 +45,6 @@ function ProductsContainer() {
 
   return (
     <div>
-      <h2>Products</h2>
       <ProductForm saving={saving} createProduct={createProduct} />
       <ProductsList
         products={products}
