@@ -4,7 +4,17 @@
     "sourceMap": true,
     "module": "commonjs",
     "target": "es5",
-    "allowJs": true
+    "allowJs": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@app/repositories": ["repositories/index.ts"],
+      "@app/messages": ["messages/index.ts"],
+      "@app/routes": ["routes/index.ts"],
+      "@app/controllers": ["controllers/index.ts"],
+      "@app/env": ["env.ts"],
+      "@app/utils/*": ["utils/*"],
+      "@ext/shared/*": ["../../shared/*"]
+    }
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules"]
