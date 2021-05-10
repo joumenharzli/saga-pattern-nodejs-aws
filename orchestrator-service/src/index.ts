@@ -15,6 +15,7 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3003;
 const ORCHESTRATOR_QUEUE_URL = process.env.ORCHESTRATOR_QUEUE_URL || "";
+
 const COMMANDS_QUEUE_URL = process.env.COMMANDS_QUEUE_URL || "";
 const PRODUCTS_QUEUE_URL = process.env.PRODUCTS_QUEUE_URL || "";
 
@@ -161,7 +162,8 @@ setInterval(
         }
       }
     ),
-  1000 * 10 // poll every 10 seconds
+  1000 * 10 
+  // poll every 10 seconds
 );
 
 function sendMessageToCommandQueue(
