@@ -11,7 +11,7 @@
     "run:watch": "NODE_ENV=development nodemon build/bundle.js"
   },
   "dependencies": {
-    "async": "^3.1.0",
+    "async": "^3.2.2",
     "aws-sdk": "^2.526.0",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
